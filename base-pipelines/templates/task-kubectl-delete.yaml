@@ -1,0 +1,22 @@
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: kubectl-delete
+spec:
+  params:
+    - name: ns
+      description: namespace
+    - name: resourceType
+      description: resource type
+    - name: resourceName
+      description: resource name
+  steps:
+    - name: run-kubectl
+      image: lachlanevenson/k8s-kubectl
+      command: ["kubectl"]
+      args:
+        - "delete"
+        - "$(params.resourceType)"
+        - "$(params.resourceName)"
+        - "-n"
+        - "$(params.ns)"

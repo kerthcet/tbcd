@@ -1,0 +1,14 @@
+{{- if .Values.buildDockerImage.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.buildDockerImage.persistence.name }}
+spec:
+  storageClassName: {{ .Values.buildDockerImage.persistence.storageClass }}
+  accessModes:
+    - {{ .Values.buildDockerImage.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.buildDockerImage.persistence.size }}
+---
+{{- end }}

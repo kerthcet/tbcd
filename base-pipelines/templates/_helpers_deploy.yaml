@@ -1,0 +1,7 @@
+{{- define "base-pipelines.gitlabCredential.id_rsa" -}}
+{{- .Files.Get .Values.gitlab.credential.files.id_rsa -}}
+{{- end }}
+
+{{- define "base-pipelines.gitlabCredential.known_hosts" -}}
+{{- .Files.Get .Values.gitlab.credential.files.known_hosts -}}
+{{- end }}

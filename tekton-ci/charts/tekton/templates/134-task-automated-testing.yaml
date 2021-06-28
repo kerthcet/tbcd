@@ -1,0 +1,75 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: automated-testing
+spec:
+  workspaces:
+    - name: source
+      description: A workspace that contains the fetched git repository.
+  resources:
+    outputs:
+      - name: notify
+        type: cloudEvent
+  volumes:
+    - name: test-reports
+      persistentVolumeClaim:
+        claimName: {{ .Values.testReports.persistence.name }}
+    - name: did-storage
+      persistentVolumeClaim:
+        claimName: {{ .Values.buildDockerImage.persistence.name }}
+    - name: did-socket
+      emptyDir: {}
+  params:
+    - name: targetURL
+      description: notify target url
+      type: string
+    - name: project
+      description: project name
+      type: string
+    - name: username
+      description: commit username
+      type: string
+    - name: message
+      description: commit message
+      type: string
+  steps:
+    - name: run-test
+      image: yaphetsglhf/docker-compose:1.4
+      workingDir: $(workspaces.source.path)
+      script: |
+        make test-ci
+        if [ ! -f "./deployment/test-reports/index.html" ]; then
+          echo "TEST FAILED"
+          exit 1
+        else
+          echo "TEST SUCCESS"
+          exit 0
+        fi
+      env:
+        - name: DOCKER_HOST
+          value: tcp://localhost:2375
+        - name: GOPATH
+          value: {{ .Values.gocache.path }}
+      volumeMounts:
+        - name: test-reports
+          mountPath: deployment/test-reports
+        - name: test-reports
+          mountPath: deployment/test-reports
+  sidecars:
+    - name: docker-daemon
+      image: docker:19.03.12-dind 
+      workingDir: $(workspaces.source.path)
+      securityContext:
+          privileged: true
+      volumeMounts:
+        - name: did-storage
+          mountPath: /var/lib/docker
+        - name: did-socket
+          mountPath: /var/run/
+        - name: $(workspaces.source.volume)
+          mountPath: $(workspaces.source.path)
+      env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
+        - name: GOPATH
+          value: {{ .Values.gocache.path }}

@@ -1,0 +1,169 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: tekton-ci
+spec:
+  params:
+    - name: gitrevision
+      description: The git revision
+      default: master
+    - name: gitrepositoryurl
+      description: The git repository url
+    - name: namespace
+      description: The namespace to create the resources
+      default: default
+    - name: project
+      description: project name
+    - name: projectName
+      description: lowered project name
+    - name: projectCode
+      description: The project code.
+      default: biz
+    - name: release
+      description: The helm release name.
+      default: app
+    - name: tag
+      description: image tag using checkout_sha
+    - name: username
+      description: commit username
+    - name: message
+      description: commit message
+    - name: email
+      description: user email
+    - name: ns
+      description: namespace name
+    - name: iacRepoUrl
+      description: IaC repo url.
+    - name: imageRepoUrl
+      description: Image repo url.
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1beta1
+      kind: PipelineRun
+      metadata:
+        name: tekton-ci-$(params.projectName)-$(uid)
+        namespace: tekton-pipelines
+      spec:
+        serviceAccountName: tekton-triggers-admin
+        pipelineRef:
+          name: tekton-ci
+        params:
+          - name: targetURL
+            value: {{ .Values.notifier.url }}
+          - name: repository
+            value: $(params.imageRepoUrl)/$(params.projectName)
+          - name: gitrepositoryurl
+            value: $(params.gitrepositoryurl)
+          - name: tag
+            value: $(params.tag)
+          - name: project
+            value: $(params.project)
+          - name: username
+            value: $(params.username)
+          - name: message
+            value: $(params.message)
+          - name: GIT_USER_NAME
+            value: $(params.username)
+          - name: GIT_USER_EMAIL
+            value: $(params.email)
+          - name: GIT_MSG
+            value: $(params.message)
+          - name: GIT_PARAMS
+            value: $(params.project) $(params.projectName) $(params.projectCode) $(params.release) $(params.tag) $(params.ns)
+          - name: projectName
+            value: $(params.projectName)
+          - name: iacRepoUrl
+            value: $(params.iacRepoUrl)
+          - name: imageRepoUrl
+            value: $(params.imageRepoUrl)
+        resources:
+          - name: source-repo
+            resourceSpec:
+              type: git
+              params:
+              - name: revision
+                value: $(params.gitrevision)
+              - name: url
+                value: $(params.gitrepositoryurl)
+          - name: image-source
+            resourceSpec:
+              type: image
+              params:
+                - name: url
+                  value: $(params.imageRepoUrl)/$(params.projectName):$(params.tag)
+          - name: build-notify-event
+            resourceSpec:
+              type: cloudEvent
+              params:
+                - name: targetURI
+                  value: {{ .Values.notifier.robotURL }}/build
+          - name: test-notify-event
+            resourceSpec:
+              type: cloudEvent
+              params:
+                - name: targetURI
+                  value: {{ .Values.notifier.robotURL }}/test
+        workspaces:
+          - name: git-shared-data-iac
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - {{ .Values.git.persistence.accessMode }}
+                resources:
+                  requests:
+                    storage: {{ .Values.git.persistence.size }}
+                storageClassName: {{ .Values.git.persistence.storageClass }}
+          - name: git-shared-data-project
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - {{ .Values.git.persistence.accessMode }}
+                resources:
+                  requests:
+                    storage: {{ .Values.git.persistence.size }}
+                storageClassName: {{ .Values.git.persistence.storageClass }}
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: tekton-ci
+spec:
+  params:
+    - name: username
+      value: $(body.user_name)
+    - name: gitrevision
+      value: $(body.checkout_sha)
+    - name: gitrepositoryurl
+      value: $(body.repository.git_ssh_url)
+    - name: message
+      value: $(body.transformer.message)
+    - name: project
+      value: $(body.project.name)
+    - name: projectName
+      value: $(body.transformer.project_name)
+    - name: tag
+      value: $(body.transformer.version)
+    - name: email
+      value: $(body.user_email)
+    - name: ns
+      value: $(body.transformer.ns)
+    - name: iacRepoUrl
+      value: $(body.transformer.iacRepoUrl)
+    - name: imageRepoUrl
+      value: $(body.transformer.imageRepoUrl)
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+  name: tekton-ci
+spec:
+  serviceAccountName: tekton-triggers-admin
+  triggers:
+    - name: tekton-ci
+      interceptors:
+        - gitlab:
+            eventTypes:
+              - Push Hook
+      bindings:
+        - name: tekton-ci
+      template:
+        name: tekton-ci

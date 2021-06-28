@@ -1,0 +1,30 @@
+gitlab:
+  credential:
+    name: gitlab-puller
+    files:
+      id_rsa: prerequisites/git.xxx.com/id_rsa
+      known_hosts: prerequisites/git.xxx.com/known_hosts
+    annotations:
+      tekton.dev/git-0: git.xxx.com
+
+gocache:
+  path: /gocache
+
+labels:
+  component: tekton-pipelines
+  release: tekton
+
+registory:
+  credential:
+    name: docker-pusher
+    secretName: base-aliyuncs
+
+buildDockerImage:
+  persistence:
+    name: build-cache
+
+image:
+  tag: latest
+  pullPolicy: IfNotPresent
+  builder: yaphetsglhf/tekton-kaniko:v1.3.0
+  launcher: yaphetsglhf/launcher:1.0

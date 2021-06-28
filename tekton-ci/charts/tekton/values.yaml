@@ -1,0 +1,87 @@
+replicaCount: 1
+
+# labels:
+#   component: tekton-pipeline
+#   release: tekton
+
+# image:
+#   tag: latest
+#   pullPolicy: IfNotPresent
+#   builder: yaphetsglhf/tekton-kaniko:v1.3.0
+#   launcher: yaphetsglhf/launcher:1.0
+
+gocache:
+  path: /gocache
+
+testReports:
+  persistence:
+    enabled: true
+    name: test-reports
+    storageClass: ""
+    size: 20Gi
+    accessMode: ReadWriteMany
+
+
+notifier:
+  url: ""
+  robotURL: http://tekton-ci-tinybot/channel
+
+git:
+  persistence:
+    storageClass: ""
+    size: 20Gi
+    accessMode: ReadWriteMany
+  iacRepoUrl: git@git.xxx.com:xxx/iac.git
+
+gitlab:
+  credential:
+    name: gitlab-puller
+
+# registory:
+#   credential:
+#     name: docker-pusher
+#     secretName: base-aliyuncs
+
+buildDockerImage:
+  persistence:
+    enabled: true
+    name: build-cache
+    storageClass: ""
+    size: 300Gi
+    accessMode: ReadWriteMany
+
+
+service:
+  port: 8080
+  name: "el-tekton-ci"
+
+dashboard:
+  service:
+    name: tekton-dashboard
+    port: 9097
+  ingress:
+    enabled: false
+    annotations: {}
+      # kubernetes.io/ingress.class: nginx
+      # kubernetes.io/tls-acme: "true"
+    hosts:
+      - host: tekton-dashboard.xxx.com
+        paths: 
+          - /
+    tls: []
+    #  - secretName: chart-example-tls
+    #    hosts:
+    #      - chart-example.local
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths: []
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local

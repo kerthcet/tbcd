@@ -1,0 +1,24 @@
+apiVersion: skaffold/v2beta2
+kind: Config
+profiles:
+- deploy:
+    helm:
+      releases:
+        - name: argocd
+          chartPath: ./argocd
+          namespace: argocd
+          skipBuildDependencies: true
+        - name: tekton-ci
+          chartPath: ./tekton-ci
+          namespace: tekton-pipelines
+          skipBuildDependencies: true
+  name: tbcd
+
+- deploy:
+    helm:
+      releases:
+      - name: base-pipelines 
+        chartPath: ./base-pipelines
+        namespace: tekton-pipelines
+        skipBuildDependencies: true
+  name: base-pipelines

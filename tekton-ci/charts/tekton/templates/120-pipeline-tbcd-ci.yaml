@@ -1,0 +1,234 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: tekton-ci
+  {{- with .Values.labels }}
+  lables:
+      {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  params:
+    - name: targetURL
+      description: notify target url
+      type: string
+    - name: repository
+      description: image registry url
+      type: string
+    - name: tag
+      description: repository tag
+      type: string
+      default: latest
+    - name: project
+      description: project name
+      type: string
+    - name: username
+      description: commit username
+      type: string
+    - name: message
+      description: commit message
+      type: string
+    - name: gitrevision
+      type: string
+      default: HEAD
+    - name: gitrepositoryurl
+      description: git repository address
+      type: string
+    - name: iacRepoUrl
+      description: The iac repository address, like `https://xxxx.git`
+      type: string
+      default: {{ .Values.git.iacRepoUrl }}
+    - name: imageRepoUrl
+      description: The image repository address
+      type: string
+    - name: GIT_USER_NAME
+      description: |
+        Git user name for performing git operation.
+      type: string
+      default: ""
+    - name: GIT_USER_EMAIL
+      description: |
+        Git user email for performing git operation.
+      type: string
+      default: ""
+    - name: GIT_MSG
+      description: The git commit message.
+      type: string
+      default: "update"
+    - name: GIT_SCRIPT
+      description: The git script to run.
+      type: string
+      default: |
+        git help
+    - name: GIT_PARAMS
+      type: string
+    - name: projectName
+      description: The project lowercase name.
+      type: string
+    - name: projectCode
+      description: The project code.
+      type: string
+      default: "biz"
+    - name: release
+      description: The helm release name.
+      type: string
+      default: "app"
+  resources:
+    - name: source-repo
+      type: git
+    - name: image-source
+      type: image
+    - name: build-notify-event
+      type: cloudEvent
+    - name: test-notify-event
+      type: cloudEvent
+  results:
+    - name: commit
+      description: The precise commit SHA after the git operation.
+  workspaces:
+    - name: git-shared-data-iac
+      description: |
+        This workspace will receive the cloned git repo and be passed
+        to the next Task for the repo's README.md file to be read.
+    - name: git-shared-data-project
+      description: |
+        The workspace will receive the cloned test git repo.
+  tasks:
+    - name: git-clone-project
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.gitrepositoryurl)
+      workspaces:
+        - name: output
+          workspace: git-shared-data-project
+    # TODO: 自动化测试 
+    # - name: automated-testing
+    #   taskRef:
+    #     name: automated-testing
+    #   runAfter:
+    #     - git-clone-project
+    #   workspaces:
+    #     - name: source
+    #       workspace: git-shared-data-project
+    #   params:
+    #     - name: targetURL
+    #       value: $(params.targetURL)
+    #     - name: project
+    #       value: $(params.project)
+    #     - name: username
+    #       value: $(params.username)
+    #     - name: message
+    #       value: $(params.message)
+    #   resources:
+    #     outputs:
+    #       - name: notify
+    #         resource: test-notify-event
+    - name: build-and-push
+      taskRef:
+        name: build-and-push
+      runAfter:
+        - git-clone-project
+      resources:
+        inputs:
+          - name: source-repo
+            resource: source-repo
+        outputs:
+          - name: buildImage
+            resource: image-source
+    - name: notify
+      taskRef:
+        name: notify
+      runAfter:
+        - build-and-push
+      resources:
+        outputs:
+          - name: notify
+            resource: build-notify-event
+      params:
+        - name: targetURL
+          value: $(params.targetURL)
+        - name: repositoryURL
+          value: $(params.repository):$(params.tag)
+        - name: project
+          value: $(params.project)
+        - name: username
+          value: $(params.username)
+        - name: message
+          value: $(params.message)
+    - name: git-clone-iac
+      taskRef:
+        name: git-clone
+      runAfter:
+        - build-and-push
+      params:
+        - name: url
+          value: $(params.iacRepoUrl)
+      workspaces:
+        - name: output
+          workspace: git-shared-data-iac
+    - name: git-cli-iac
+      taskRef:
+        name: git-cli
+      runAfter:
+        - git-clone-iac
+      params:
+        - name: GIT_USER_NAME 
+          value: $(params.GIT_USER_NAME)
+        - name: GIT_USER_EMAIL
+          value: $(params.GIT_USER_EMAIL)
+        - name: GIT_MSG
+          value: $(params.GIT_MSG)
+        - name: GIT_PARAMS
+          value: $(params.GIT_PARAMS)
+        - name: GIT_SCRIPT
+          value: |
+
+            ln -s /tekton/home/.ssh /root/.ssh
+            git checkout master
+            git remote -v
+            git_params="$(params.GIT_PARAMS)"
+
+            project=`echo $git_params | awk '{print $1}'`
+            projectName=`echo $git_params | awk '{print $2}'`
+            projectCode=`echo $git_params | awk '{print $3}'`
+            release=`echo $git_params | awk '{print $4}'`
+            tag=`echo $git_params | awk '{print $5}'`
+            ns=`echo $git_params | awk '{print $6}'`
+            path=image/tag
+
+            python3 ./controller/version-controller.py $projectCode $release $ns $projectName $path $tag
+
+            git show-ref
+            message="<"$project">""$(params.GIT_MSG)"
+            git commit -a -m "$message" && git push origin master
+      workspaces:
+        - name: source
+          workspace: git-shared-data-iac
+---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: event-display
+#   labels:
+#     app: event-display
+# spec:
+#   type: ClusterIP
+#   ports:
+#     - name: listener
+#       port: 8080
+#       protocol: TCP
+#   selector:
+#     app: event-display
+# ---
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: event-display
+#   labels:
+#     app: event-display
+# spec:
+#   hostname: event-display
+#   containers:
+#   - image: yaphetsglhf/eventingsource-eventdisplay:1.0
+#     name: web

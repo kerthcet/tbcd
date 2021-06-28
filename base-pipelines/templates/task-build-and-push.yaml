@@ -1,0 +1,57 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: build-and-push
+  {{- with .Values.labels }}
+  lables:
+      {{- toYaml . | nindent 4 }}
+  {{- end }}
+  annotations:
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  resources:
+    inputs:
+      - name: source-repo
+        type: git
+    outputs:
+      - name: buildImage
+        type: image
+  volumes:
+    - name: {{ .Values.registory.credential.name }}
+      secret:
+        secretName: {{ .Values.registory.credential.secretName }}
+        items:
+          - key: .dockerconfigjson
+            path: config.json
+    - name: build-cache
+      persistentVolumeClaim:
+        claimName: {{ .Values.buildDockerImage.persistence.name }}
+  params:
+    - name: pathToContext
+      description: The build context
+      default: $(resources.inputs.source-repo.path)
+    - name: pathToDockerfile
+      default: $(resources.inputs.source-repo.path)/Dockerfile
+  steps:
+    - name: build-and-push
+      image: {{ .Values.image.builder }}
+      env:
+        - name: "DOCKER_CONFIG"
+          value: "/kaniko/.docker"
+        - name: "GOPATH"
+          value: {{ .Values.gocache.path }}
+      command:
+        - /kaniko/executor
+      args:
+        - --context=dir:///$(params.pathToContext)
+        - --dockerfile=$(params.pathToDockerfile)
+        - --destination=$(resources.outputs.buildImage.url)
+        - --cache=true
+        - --cache-dir=/cache
+        - --use-new-run=true
+        - --snapshotMode=redo
+      volumeMounts:
+        - name: {{ .Values.registory.credential.name }}
+          mountPath: /kaniko/.docker
+        - name: build-cache
+          mountPath: /cache

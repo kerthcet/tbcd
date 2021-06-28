@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.testReports.persistence.name }}
+spec:
+  storageClassName: {{ .Values.testReports.persistence.storageClass }}
+  accessModes:
+    - {{ .Values.testReports.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.testReports.persistence.size }}

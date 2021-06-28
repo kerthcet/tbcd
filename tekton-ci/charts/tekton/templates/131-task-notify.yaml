@@ -1,0 +1,36 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: notify
+  {{- with .Values.labels }}
+  lables:
+      {{- toYaml . | nindent 4 }}
+  {{- end }}
+  annotations:
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  resources:
+    outputs:
+      - name: notify
+        type: cloudEvent
+  params:
+    - name: targetURL
+      description: notify target url
+      type: string
+    - name: repositoryURL
+      description: repository url
+      type: string
+    - name: project
+      description: project name
+      type: string
+    - name: username
+      description: commit username
+      type: string
+    - name: message
+      description: commit message
+      type: string
+  steps:
+    - name: echo
+      image: busybox
+      script: |
+        echo "Sent cloudEvent"

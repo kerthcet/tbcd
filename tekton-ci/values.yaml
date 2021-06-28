@@ -1,0 +1,19 @@
+# Default values for tekton-ci.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+tekton:
+  enabled: true
+  notifier:
+    url: ""
+  dashboard:
+    ingress:
+      enabled: false
+
+tinybot:
+  enabled: true
+  ingress:
+    enabled: true
+  image:
+    repository: yaphetsglhf/chatops-errbot
+    tag: release-1.1.41

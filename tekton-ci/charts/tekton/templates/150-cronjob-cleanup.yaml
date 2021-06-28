@@ -1,0 +1,110 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cleaner
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cleaner
+rules:
+  - apiGroups: ["tekton.dev"]
+    resources: ["pipelineruns", "taskruns"]
+    verbs: ["delete", "get", "watch", "list"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cleaner-to-cleaner
+roleRef:
+  kind: Role
+  name: cleaner
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+  - kind: ServiceAccount
+    name: cleaner
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: cleanup-pipelineruns-daily
+spec:
+  schedule: "59 23 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 0
+  failedJobsHistoryLimit: 0
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccount: cleaner
+          containers:
+            - name: kubectl
+              image: ghcr.io/ctron/kubectl:latest
+              env:
+                - name: NUM_TO_KEEP
+                  value: "0"
+              command:
+                - /bin/bash
+                - -c
+                - |
+                    TO_DELETE="$(kubectl get pipelinerun -o jsonpath='{range .items[?(@.status.completionTime)]}{.status.completionTime}{" "}{.metadata.name}{"\n"}{end}' | grep 'tekton-ci' | sort | head -n -${NUM_TO_KEEP} | awk '{ print $2}')"
+                    test -n "$TO_DELETE" && kubectl delete pipelinerun ${TO_DELETE} || true
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: cleanup-pipelineruns-hourly
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccount: cleaner
+          containers:
+            - name: kubectl
+              image: ghcr.io/ctron/kubectl:latest
+              env:
+                - name: NUM_TO_KEEP
+                  value: "5"
+              command:
+                - /bin/bash
+                - -c
+                - |
+                    TO_DELETE="$(kubectl get pipelinerun -o jsonpath='{range .items[?(@.status.completionTime)]}{.status.completionTime}{" "}{.metadata.name}{"\n"}{end}' | grep 'tekton-ci' | sort | head -n -${NUM_TO_KEEP} | awk '{ print $2}')"
+                    test -n "$TO_DELETE" && kubectl delete pipelinerun ${TO_DELETE} || true
+---
+# apiVersion: batch/v1beta1
+# kind: CronJob
+# metadata:
+#   name: cleanup-taskrun-hourly
+# spec:
+#   schedule: "*/15 * * * *"
+#   concurrencyPolicy: Forbid
+#   successfulJobsHistoryLimit: 1
+#   failedJobsHistoryLimit: 1
+#   jobTemplate:
+#     spec:
+#       template:
+#         spec:
+#           restartPolicy: OnFailure
+#           serviceAccount: cleaner
+#           containers:
+#             - name: kubectl
+#               image: ghcr.io/ctron/kubectl:latest
+#               env:
+#                 - name: NUM_TO_KEEP
+#                   value: "15"
+#               command:
+#                 - /bin/bash
+#                 - -c
+#                 - |
+#                     TO_DELETE="$(kubectl get taskrun -o jsonpath='{range .items[?(@.status.completionTime)]}{.status.completionTime}{" "}{.metadata.name}{"\n"}{end}' | grep 'tekton-ci' | sort | head -n -${NUM_TO_KEEP} | awk '{ print $2}')"
+#                     test -n "$TO_DELETE" && kubectl delete taskrun ${TO_DELETE} || true
