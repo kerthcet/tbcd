@@ -6,7 +6,6 @@ spec:
   params:
     - name: gitrevision
       description: The git revision
-      default: master
     - name: gitrepositoryurl
       description: The git repository url
     - name: namespace
@@ -75,6 +74,8 @@ spec:
             value: $(params.iacRepoUrl)
           - name: imageRepoUrl
             value: $(params.imageRepoUrl)
+          - name: gitrevision
+            value: $(params.gitrevision)
         resources:
           - name: source-repo
             resourceSpec:

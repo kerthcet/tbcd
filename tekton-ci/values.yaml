@@ -16,4 +16,4 @@ tinybot:
     enabled: true
   image:
     repository: yaphetsglhf/chatops-errbot
-    tag: release-1.1.41
+    tag: release-1.1.46
